@@ -60,14 +60,20 @@ $("form").submit(function (evt) {
   evt.preventDefault();
 
   let data;
-  let input = $("#m").val();
+  const input = $("#m").val();
+  const inputs = input.split(" ");
 
-  if (input === '/joke') {
-    data = { type: "get-joke", text: input }
+  if (inputs[0] === '/joke') {
+    data = { type: "get-joke" };
+  } else if (inputs[0] === '/members') {
+    data = { type: "get-members" };
+  } else if (inputs[0] === '/name') {
+    const newName = inputs.slice(1).join("");
+    data = { type: "new-name", text: newName };
   } else {
-    data = { type: "chat", text: input }
+    data = { type: "chat", text: input };
   }
-  console.log("input = ", input)
+  console.log("input = ", input);
   ws.send(JSON.stringify(data));
 
   $("#m").val("");

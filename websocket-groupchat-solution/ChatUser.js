@@ -4,6 +4,7 @@
 
 // Room is an abstraction of a chat channel
 const Room = require("./Room");
+const { getRandomJoke } = require("./jokes");
 
 /** ChatUser is a individual connection from client -> server to chat. */
 
@@ -62,45 +63,23 @@ class ChatUser {
     });
   }
 
+  /** Handle a private chat: send to recipient only.
+   *
+   * @param recipient {string} recipient of chat
+   * @param text {string} message to send
+   * */
 
+  handlePrivateChat(recipient, text) {
+    // get the recipient instance,
+    // so we can send message
+    const member = this.room.getMember(recipient);
 
-  /**
-   * class method for sending a joke to this user's client
-   */
-
-  handleJoke() {
-    this.send(JSON.stringify({
-      type: "chat",
-      text: "What do you call eight hobbits? A hob-byte!",
-      name: "Server"
-    }));
-  }
-
-  /**
-   * class method for sending a list of members to this user's client
-   */
-
-  handleMembers() {
-
-    const membersNames = Array.from(this.room.members).map(member => member.name);
-
-    this.send(JSON.stringify({
-      type: "chat",
-      text: membersNames.join(", "),
-      name: "In room"
-    }));
-  }
-
-  /**
-   * class method for changing a user's name
-   */
-  changeName(text) {
-    const oldName = this.name;
-    this.name = text;
-    this.room.broadcast({
-      type: "note",
-      text: `${oldName} has changed their name to ${this.name}.`,
-    })
+    member.send(JSON.stringify(
+      {
+        name: this.name,
+        type: "priv-chat",
+        text: text,
+      }));
   }
 
   /** Handle messages from client:
@@ -115,13 +94,13 @@ class ChatUser {
 
   handleMessage(jsonData) {
     let msg = JSON.parse(jsonData);
-    console.log("message type = ", msg.type);
 
     if (msg.type === "join") this.handleJoin(msg.name);
     else if (msg.type === "chat") this.handleChat(msg.text);
-    else if (msg.type === "get-joke") this.handleJoke();
-    else if (msg.type === "get-members") this.handleMembers();
-    else if (msg.type === "new-name") this.changeName(msg.text);
+    else if (msg.type === "get-joke") this.handleGetJoke();
+    else if (msg.type === "get-members") this.handleGetMembers();
+    else if (msg.type === "change-username") this.handleChangeUsername(msg.text);
+    else if (msg.type === "priv-chat") this.handlePrivateChat(msg.recipient, msg.text);
     else throw new Error(`bad message: ${msg.type}`);
   }
 
@@ -132,6 +111,66 @@ class ChatUser {
     this.room.broadcast({
       type: "note",
       text: `${this.name} left ${this.room.name}.`,
+    });
+  }
+
+  /** Handle get joke: get a joke, send to this user only */
+
+  async handleGetJoke() {
+    const joke = await getRandomJoke();
+    this.send(JSON.stringify(
+      {
+        name: "server",
+        type: "chat",
+        text: joke,
+      }));
+  }
+
+  /** Handle get room members:
+   * - gets all room members
+   * - send member names to this user only
+   */
+
+  handleGetMembers() {
+    // members is a Set of user instances
+    const members = this.room.getMembers();
+    const memberNames = [];
+
+    for (let member of members) {
+      memberNames.push(member.name);
+    }
+
+    this.send(JSON.stringify(
+      {
+        name: "In room",
+        type: "chat",
+        text: memberNames.join(", "),
+      }));
+  }
+
+  /** Change user's name:
+   *
+   * @param username {string} new name for this user
+   * */
+
+  changeUsername(username) {
+    this.name = username;
+  }
+
+  /** Handle changing a user's name: broadcast change to room.
+  *
+  * @param username {string} new name for this user
+  * */
+
+  handleChangeUsername(username) {
+    const currentName = this.name;
+    this.changeUsername(username);
+    const updatedName = this.name;
+
+    this.room.broadcast({
+      name: "server",
+      type: "chat",
+      text: `The username for ${currentName} has changed to ${updatedName}`,
     });
   }
 }
